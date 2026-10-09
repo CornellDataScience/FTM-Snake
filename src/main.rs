@@ -1,119 +1,63 @@
+mod player;
+mod snake;
+mod apple;
+mod lib;
+use lib::*;
 use macroquad::prelude::*;
 use std::collections::*;
-use Player;
-type Point = (i16, i16);
+use player::*;
+use snake::Snake;
+use apple::*;
+use ::rand::Rng;
 
-const SQUARES: i16 = 25;
-const SQUARE_SIZE: f32 = 20.;
+fn draw_apple(width: i16,
+    height: i16,
+    snake: &Snake,
+    rng: &mut impl Rng) -> (i16, i16) {
+        spawn_apple(width, height, snake.body.iter().chain(snake.body.iter()).copied(), rng).unwrap()
+    }
 
-//PLACEHOLDER FOR ELLA AND WONJIN LATER
-
-
-struct Snake {
-    player: Player,
-    head: Point,
-    dir: Point,
-    body: VecDeque<Point>,
-    body_set: HashSet<Point>,
-    is_alive: bool
+fn remove_apple(apples: &mut Vec<(i16, i16)>,
+    snake: &mut Snake,
+    index: usize,) {
+    apples.remove(index);
+    let mut rng = ::rand::thread_rng();
+    if let Some(new_apple) = spawn_apple(
+        SQUARES,
+        SQUARES,
+        snake.body.iter().chain(std::iter::once(&snake.head)).chain(apples.iter()).copied(),
+        &mut rng) {
+            apples.push(new_apple);
+        }
 }
-
-impl Snake {
-    fn new(head: Point, player: Player) -> Self {
-        // Fix intial direction to be inline with player, and initlize tail
-        let dir: Point = match player.current_direction() {
-            Direction::Up => (0, -1),
-            Direction::Down => (0, 1),
-            Direction::Left => (-1, 0),
-            Direction::Right => (1, 0),
-        };
-        //continue here
-
-        
-        let mut body = VecDeque::new();
-        let mut body_set = HashSet::new();
-
-        body.push_front(head);
-        body_set.insert(head);
-
-        Snake {
-            head,
-            dir: (1, 0),
-            body,
-            body_set,
-            is_alive: true,
-        }
-    }
-
-    fn move_snake(&mut self) {
-        // Get player's most recent direction
-        let new_dir = self.player.current_direction;
-
-        // Don't allow snake to immediately reverse direction
-        if new_dir != (-self.dir.0, -self.dir.1) {
-            self.dir = new_dir;
-        }
-
-        // Calculate new head
-        let new_head = (
-            self.head.0 + self.dir.0,
-            self.head.1 + self.dir.1,
-        );
-
-        // Add new head
-        self.head = new_head;
-        self.body.push_front(new_head);
-        self.body_set.insert(new_head);
-
-        // Remove tail
-        if let Some(tail) = self.body.pop_back() {
-            self.body_set.remove(&tail);
-        }
-    }
-
-    fn grow(&mut self, player: &Player) {
-        let new_dir = player.current_direction;
-
-        if new_dir != (-self.dir.0, -self.dir.1) {
-            self.dir = new_dir;
-        }
-
-        let new_head = (
-            self.head.0 + self.dir.0,
-            self.head.1 + self.dir.1,
-        );
-
-        self.head = new_head;
-        self.body.push_front(new_head);
-        self.body_set.insert(new_head);
-
-        // Don't remove tail -> snake grows
-    }
-
-    fn hit_self(&self) -> bool {
-        self.body
-            .iter()
-            .skip(1)
-            .any(|point| *point == self.head)
-    }
-
-    fn out_of_bounds(&self) -> bool {
-        self.head.0 < 0
-            || self.head.1 < 0
-            || self.head.0 >= SQUARES
-            || self.head.1 >= SQUARES
-    }
-
-    fn body_contains(&self, point: &Point) -> bool {
-        self.body_set.contains(point)
-    }
-}
-
 #[macroquad::main("MyGame")]
 async fn main() {
-    let snake = Snake::new((2,2));
+    let mut snake = Snake::new((2, 2), Player::new());
+    let mut rng = ::rand::thread_rng();
+
+    let mut apples = vec![
+        draw_apple(
+            SQUARES,
+            SQUARES,
+            &snake,
+            &mut rng,
+        ),
+    ];
+    let mut last_move_time = get_time();
+    let move_interval = 0.15;
 
     loop {
+
+        snake.player.handle_input();
+
+        if get_time() - last_move_time >= move_interval && snake.is_alive() {
+
+            if let Some(index) = snake.step(&apples){
+                remove_apple(&mut apples, &mut snake, index);
+                //
+            }
+            last_move_time = get_time();
+        }
 
         let game_size = screen_width().min(screen_height());
         let offset_x = (screen_width() - game_size) / 2. + 10.;
@@ -161,7 +105,15 @@ async fn main() {
             sq_size,
             DARKGREEN,
         );
-
+        for &(x, y) in &apples {
+            draw_rectangle(
+                offset_x + x as f32 * sq_size,
+                offset_y + y as f32 * sq_size,
+                sq_size,
+                sq_size,
+                RED,
+            );
+        }
         next_frame().await
     }
 }

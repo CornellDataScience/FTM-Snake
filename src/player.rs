@@ -22,7 +22,7 @@ impl Direction {
 
 #[derive(Debug)]
 pub struct Player {
-    current_direction: Direction,
+    pub current_direction: Direction,
 }
 
 impl Player {
