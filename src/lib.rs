@@ -6,6 +6,11 @@ pub mod snake;
 
 pub type Point = (i16, i16);
 
+/// Number of snakes in a match.
+pub const PLAYER_COUNT: usize = 2;
+/// Apples kept on the board while free cells remain.
+pub const APPLE_COUNT: usize = 3;
+
 #[derive(Debug, Clone, Copy)]
 pub struct Board {
     pub width: i16,

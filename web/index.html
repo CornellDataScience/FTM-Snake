@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FTM Snake</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main id="join-view" class="view">
+      <form id="join-form" class="card">
+        <h1>FTM Snake</h1>
+        <input id="name-input" maxlength="16" placeholder="Your name" autocomplete="off" required autofocus />
+        <button type="submit">Play</button>
+      </form>
+    </main>
+
+    <main id="game-view" class="view" hidden>
+      <div class="game">
+        <header class="bar">
+          <span class="stat"><span class="apple-icon"></span><span id="score">0</span></span>
+          <span id="player-name"></span>
+          <button id="leave-button" class="icon-button" title="Leave">✕</button>
+        </header>
+        <div class="board-wrap">
+          <canvas id="board"></canvas>
+          <div id="overlay" class="overlay">
+            <p id="overlay-text"></p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

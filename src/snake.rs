@@ -1,14 +1,9 @@
 use std::collections::{HashSet, VecDeque};
 
-use crate::{Board, Point, player::Direction};
+use crate::{Point, player::Direction};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StepOutcome {
-    Moved,
-    AteApple(usize),
-    Died,
-}
-
+/// Segment storage and turning. Collision rules live in `Game`, which sees
+/// every snake's planned move before any of them advance.
 pub struct Snake {
     // All segments include the head at the front, followed by the body and tail.
     segments: VecDeque<Point>,
@@ -19,15 +14,26 @@ pub struct Snake {
 }
 
 impl Snake {
-    /// Creates a three-cell snake facing right. The caller must provide room
-    /// for the two body cells to the left of the head.
-    pub fn new(head: Point) -> Self {
-        let segments = VecDeque::from([head, (head.0 - 1, head.1), (head.0 - 2, head.1)]);
+    /// Creates a three-cell snake facing `direction`. The caller must provide
+    /// room for the two body cells behind the head.
+    pub fn new(head: Point, direction: Direction) -> Self {
+        let (dx, dy) = direction.offset();
+        Self::from_segments(
+            VecDeque::from([
+                head,
+                (head.0 - dx, head.1 - dy),
+                (head.0 - 2 * dx, head.1 - 2 * dy),
+            ]),
+            direction,
+        )
+    }
+
+    fn from_segments(segments: VecDeque<Point>, direction: Direction) -> Self {
         let occupied = segments.iter().copied().collect();
         Self {
             segments,
             occupied,
-            direction: Direction::Right,
+            direction,
             pending_direction: None,
             alive: true,
         }
@@ -37,8 +43,20 @@ impl Snake {
         self.segments[0]
     }
 
+    pub fn tail(&self) -> Point {
+        *self.segments.back().expect("a snake has a tail")
+    }
+
+    pub fn length(&self) -> usize {
+        self.segments.len()
+    }
+
     pub fn segments(&self) -> impl Iterator<Item = Point> + '_ {
         self.segments.iter().copied()
+    }
+
+    pub fn occupies(&self, cell: Point) -> bool {
+        self.occupied.contains(&cell)
     }
 
     pub fn is_alive(&self) -> bool {
@@ -56,37 +74,37 @@ impl Snake {
         }
     }
 
-    pub fn step(&mut self, board: Board, apples: &[Point]) -> StepOutcome {
-        if !self.alive {
-            return StepOutcome::Died;
-        }
+    /// The cell the head will enter on the next advance, including any pending turn.
+    pub fn next_head(&self) -> Point {
+        let (dx, dy) = self.pending_direction.unwrap_or(self.direction).offset();
+        let head = self.head();
+        (head.0 + dx, head.1 + dy)
+    }
+
+    /// Moves one cell. A growing move keeps the tail in place.
+    pub fn advance(&mut self, grow: bool) {
+        let next_head = self.next_head();
         if let Some(direction) = self.pending_direction.take() {
             self.direction = direction;
         }
-        let (dx, dy) = self.direction.offset();
-        let head = self.head();
-        let next_head = (head.0 + dx, head.1 + dy);
-        let apple_index = apples.iter().position(|apple| *apple == next_head);
-        // The tail vacates its cell on a non-growing move.
-        let entering_vacating_tail =
-            apple_index.is_none() && self.segments.back() == Some(&next_head);
-        if !board.contains(next_head)
-            || (self.occupied.contains(&next_head) && !entering_vacating_tail)
-        {
-            self.alive = false;
-            return StepOutcome::Died;
-        }
-        if apple_index.is_none() {
-            let tail = self.segments.pop_back().expect("a live snake has a tail");
+        if !grow {
+            let tail = self.segments.pop_back().expect("a snake has a tail");
             self.occupied.remove(&tail);
         }
         self.segments.push_front(next_head);
         self.occupied.insert(next_head);
-        match apple_index {
-            Some(index) => StepOutcome::AteApple(index),
-            None => StepOutcome::Moved,
-        }
     }
+
+    /// Stops the snake. Its segments stay where they were.
+    pub fn kill(&mut self) {
+        self.alive = false;
+        self.pending_direction = None;
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn snake_from_segments(segments: &[Point], direction: Direction) -> Snake {
+    Snake::from_segments(segments.iter().copied().collect(), direction)
 }
 
 #[cfg(test)]
@@ -94,22 +112,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn movement_preserves_length_and_connected_segments() {
-        let mut snake = Snake::new((2, 2));
-        assert_eq!(snake.step(Board::default(), &[]), StepOutcome::Moved);
+    fn new_snake_extends_behind_its_direction() {
+        let snake = Snake::new((22, 22), Direction::Left);
         assert_eq!(
             snake.segments().collect::<Vec<_>>(),
-            [(3, 2), (2, 2), (1, 2)]
+            [(22, 22), (23, 22), (24, 22)]
         );
     }
 
     #[test]
-    fn eating_preserves_tail_and_adds_one_segment() {
-        let mut snake = Snake::new((2, 2));
+    fn movement_preserves_length_and_connected_segments() {
+        let mut snake = Snake::new((2, 2), Direction::Right);
+        snake.advance(false);
         assert_eq!(
-            snake.step(Board::default(), &[(3, 2)]),
-            StepOutcome::AteApple(0)
+            snake.segments().collect::<Vec<_>>(),
+            [(3, 2), (2, 2), (1, 2)]
         );
+        assert!(!snake.occupies((0, 2)));
+    }
+
+    #[test]
+    fn eating_preserves_tail_and_adds_one_segment() {
+        let mut snake = Snake::new((2, 2), Direction::Right);
+        snake.advance(true);
         assert_eq!(
             snake.segments().collect::<Vec<_>>(),
             [(3, 2), (2, 2), (1, 2), (0, 2)]
@@ -118,45 +143,21 @@ mod tests {
 
     #[test]
     fn rapid_inputs_cannot_reverse_or_replace_the_pending_turn() {
-        let mut snake = Snake::new((2, 2));
+        let mut snake = Snake::new((2, 2), Direction::Right);
         snake.set_direction(Direction::Left);
         snake.set_direction(Direction::Up);
         snake.set_direction(Direction::Left);
-        snake.step(Board::default(), &[]);
+        assert_eq!(snake.next_head(), (2, 1));
+        snake.advance(false);
         assert_eq!(snake.head(), (2, 1));
     }
 
     #[test]
-    fn wall_collision_preserves_segments_and_dead_snakes_do_not_move() {
-        let mut snake = Snake::new((24, 2));
-        let before: Vec<_> = snake.segments().collect();
-        assert_eq!(snake.step(Board::default(), &[]), StepOutcome::Died);
+    fn dead_snakes_ignore_turns() {
+        let mut snake = Snake::new((2, 2), Direction::Right);
+        snake.kill();
+        snake.set_direction(Direction::Up);
         assert!(!snake.is_alive());
-        assert_eq!(snake.step(Board::default(), &[]), StepOutcome::Died);
-        assert_eq!(snake.segments().collect::<Vec<_>>(), before);
-    }
-
-    #[test]
-    fn self_collision_kills_but_entering_a_vacating_tail_is_allowed() {
-        let segments = VecDeque::from([(2, 2), (2, 3), (1, 3), (1, 2)]);
-        let mut snake = Snake {
-            occupied: segments.iter().copied().collect(),
-            segments,
-            direction: Direction::Up,
-            pending_direction: None,
-            alive: true,
-        };
-        snake.set_direction(Direction::Left);
-        assert_eq!(snake.step(Board::default(), &[]), StepOutcome::Moved);
-        // Growing keeps the tail occupied, making the same move fatal.
-        let mut growing = Snake {
-            segments: VecDeque::from([(2, 2), (2, 3), (1, 3), (1, 2)]),
-            occupied: [(2, 2), (2, 3), (1, 3), (1, 2)].into_iter().collect(),
-            direction: Direction::Up,
-            pending_direction: None,
-            alive: true,
-        };
-        growing.set_direction(Direction::Left);
-        assert_eq!(growing.step(Board::default(), &[(1, 2)]), StepOutcome::Died);
+        assert_eq!(snake.next_head(), (3, 2));
     }
 }
