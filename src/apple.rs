@@ -4,7 +4,7 @@ use std::collections::HashSet;
 /// Chooses a random unoccupied cell for a new apple.
 ///
 /// Coordinates are zero-indexed `(x, y)` tuples, where `x` is the column and
-/// `y` is the row, matching `Point = (i16, i16)` in `main.rs`.
+/// `y` is the row, matching the shared `Point` type.
 ///
 /// `occupied` is every cell the apple must not land on: both snakes' bodies
 /// (head included) and any apples already on the board. Chain them together
@@ -48,8 +48,8 @@ pub fn spawn_apple(
 #[cfg(test)]
 mod tests {
     use super::spawn_apple;
-    use rand::rngs::StdRng;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
     use std::collections::VecDeque;
 
     #[test]
@@ -110,7 +110,7 @@ mod tests {
 
     #[test]
     fn works_with_two_vecdeque_snakes_like_main() {
-        // Mirrors how main.rs stores snake bodies.
+        // Accepts iterators from multiple snake segment queues.
         let snake1: VecDeque<(i16, i16)> = VecDeque::from(vec![(0, 0), (1, 0)]);
         let snake2: VecDeque<(i16, i16)> = VecDeque::from(vec![(0, 1)]);
         let apples = [(1, 1)];
@@ -121,7 +121,11 @@ mod tests {
             let apple = spawn_apple(
                 3,
                 2,
-                snake1.iter().chain(snake2.iter()).chain(apples.iter()).copied(),
+                snake1
+                    .iter()
+                    .chain(snake2.iter())
+                    .chain(apples.iter())
+                    .copied(),
                 &mut rng,
             )
             .unwrap();
