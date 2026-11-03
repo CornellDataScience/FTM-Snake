@@ -4,8 +4,12 @@ A local two-player Snake prototype built with Rust and Macroquad.
 
 ## Run and check
 
+The package has three binaries, so `cargo run` needs `--bin`:
+
 ```sh
-cargo run
+cargo run --bin apple_logic   # the desktop game
+cargo run --bin demo          # the same game on a fixed-rate tick clock
+cargo run --bin server        # WebSocket echo server for the web client
 cargo test --all-targets
 cargo clippy --all-targets -- -D warnings
 cargo fmt -- --check
@@ -21,6 +25,26 @@ shared cell (or stay put if they tried to pass through each other) and implode
 before the draw is shown. Press Space to restart after a match. Only one valid
 turn is accepted per tick. LAN play remains future work.
 
+## Demo
+
+`cargo run --bin demo` shows everything the game does so far, in one window:
+
+- **Local multiplayer:** two snakes on one keyboard, P1 on WASD and P2 on the
+  arrow keys, each score (snake length) shown at the top.
+- **Apple generation:** three apples on the board while free cells remain, each
+  respawned on a random cell that no snake or apple occupies.
+- **Simultaneous moves:** both snakes plan their move before either advances,
+  so collisions are judged against where the other snake is going; a snake may
+  follow into a tail that is moving away.
+- **Match results:** walls and bodies kill, dead snakes stay as obstacles, the
+  last snake alive wins, and head-on crashes implode into a draw.
+- **Fixed-rate ticks:** the snakes move exactly ten times a second whatever the
+  frame rate, and a stalled window (over 0.25 s) does not replay a burst of moves.
+- **Restart:** Space starts a new match at any time.
+
+The demo changes no game rules; it reuses `input.rs` and `render.rs` and only
+replaces the timing loop in `main.rs`.
+
 ## Code layout
 
 - `lib.rs`: shared cell coordinates, board dimensions, player and apple counts.
@@ -31,6 +55,8 @@ turn is accepted per tick. LAN play remains future work.
 - `input.rs`: desktop keyboard bindings.
 - `render.rs`: board and entity drawing, sized to the window.
 - `main.rs`: application setup and timing.
+- `bin/demo.rs`: the same game on a fixed-rate tick clock.
+- `bin/server.rs`: WebSocket server, currently an echo.
 
 The library has no keyboard, window, or clock calls. A future server can drive
 `Game::set_direction(player, direction)` and `Game::tick` directly and supply its
