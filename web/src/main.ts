@@ -16,14 +16,14 @@ const overlayText = $<HTMLParagraphElement>("overlay-text");
 const leaveButton = $<HTMLButtonElement>("leave-button");
 
 const KEY_DIRECTIONS: Record<string, Direction> = {
-  ArrowUp: "Up",
-  ArrowDown: "Down",
-  ArrowLeft: "Left",
-  ArrowRight: "Right",
-  w: "Up",
-  s: "Down",
-  a: "Left",
-  d: "Right",
+  ArrowUp: "up",
+  ArrowDown: "down",
+  ArrowLeft: "left",
+  ArrowRight: "right",
+  w: "up",
+  s: "down",
+  a: "left",
+  d: "right",
 };
 
 let connection: ServerConnection | null = null;
@@ -64,7 +64,7 @@ window.addEventListener("resize", () => drawGame(canvas, state, playerId));
 function handleMessage(message: ServerMessage): void {
   switch (message.type) {
     case "welcome":
-      playerId = message.playerId;
+      playerId = message.player_id;
       break;
     case "state": {
       state = message.state;

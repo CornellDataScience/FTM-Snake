@@ -27,7 +27,11 @@ async fn upgrade(upgrade: WebSocketUpgrade) -> Response {
 
 /// Serves one client until it disconnects, echoing every message back
 async fn handle(mut socket: WebSocket) {
+    // TODO(joining): replace the echo below with real message handling.
+    
     println!("client connected");
+    // TODO(heartbeats): detect clients that have gone silent.
+    
     while let Some(Ok(message)) = socket.recv().await {
         let Message::Text(text) = message else {
             continue;

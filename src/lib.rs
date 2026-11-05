@@ -1,7 +1,8 @@
-//! Game rules shared by the desktop client and future server.
+//! Game rules shared by the desktop client and the game server.
 pub mod apple;
 pub mod game;
 pub mod player;
+pub mod protocol;
 pub mod snake;
 
 pub type Point = (i16, i16);

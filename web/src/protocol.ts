@@ -1,8 +1,9 @@
 //! Messages exchanged with the game server.
 //!
-//! Shapes follow serde's default JSON encoding of the Rust types, so the
-//! server can derive `Serialize`/`Deserialize` and stay compatible:
-//! `Point` is an `(i16, i16)` tuple and `Direction` is a unit enum.
+//! Mirrored by `src/protocol.rs`; change both files together. The Rust side
+//! matches these shapes with `#[serde(tag = "type", rename_all = "snake_case")]`
+//! on the message enums and `#[serde(rename_all = "lowercase")]` on
+//! `Direction`. `Point` is an `(i16, i16)` tuple, which serde writes as `[x, y]`.
 
 export type Point = [x: number, y: number];
 
@@ -26,8 +27,8 @@ export interface GameState {
 
 export interface LobbyPlayer {
   id: string;
-  name : string; 
-  ready : boolean;
+  name: string;
+  ready: boolean;
 }
 
 export interface LeaderboardEntry {
@@ -41,12 +42,12 @@ export type ClientMessage =
   | { type: "set_ready"; ready: boolean }
   | { type: "get_lobby" }
   | { type: "get_leaderboard" }
-  | { type: "leave" }; 
+  | { type: "leave" };
 
 export type ServerMessage =
   | { type: "welcome"; player_id: string }
   | { type: "state"; state: GameState }
-  | { type: "player_joined"; player : LobbyPlayer }
+  | { type: "player_joined"; player: LobbyPlayer }
   | { type: "lobby"; players: LobbyPlayer[] }
   | {
       type: "player_eliminated";
