@@ -1,0 +1,36 @@
+web/src/protocol.ts
+  s_673c968c94fe60::t_eff89ebdd10cbe 49-50
+  s_673c968c94fe60::t_d6e3deed9652b9 19-20
+  s_673c968c94fe60::t_533454e4d74529 34-35
+web/src/connection.ts
+  s_673c968c94fe60::t_08aa65139e42d5 35,42,48,56
+  s_673c968c94fe60::t_baf1ec321f8edc 6-7,17,21-24,29-32,44,47,49-55,57-62
+src/protocol.rs
+  s_673c968c94fe60::t_8262367c726fb5 68-69,77-78
+  s_673c968c94fe60::t_ce641142902fdd 23-38,40-49,85
+  s_673c968c94fe60::t_190d2d4f7f6992 16
+src/bin/server.rs
+  s_673c968c94fe60::t_ce641142902fdd 132-134
+  s_673c968c94fe60::t_427b69f5657d52 76-78
+  s_673c968c94fe60::t_198ae8ee0b8d7e 97,102,121,129,137
+  s_673c968c94fe60::t_2459126461f560 25
+  s_673c968c94fe60::t_3ecf444a625175 1-10,13-16,20,23-24,26-38,43-44,55-57,60-75,79-89,92-96,98-101,103-120,122-128,130-131,135-136,138-147
+  s_673c968c94fe60::t_9dfd9c0ab27d87 40,54,59
+  s_673c968c94fe60::t_3b2fbee2a02102 58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9bab317caf7543388e1f77776254ef76defdee65",
+  "prompts": {},
+  "sessions": {
+    "s_673c968c94fe60": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "64ed073d-4530-403c-b50c-5047e3d0afbc",
+        "model": "default"
+      },
+      "human_author": "Ella Schneyer <emschneyer@gmail.com>"
+    }
+  }
+}
