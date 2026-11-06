@@ -13,21 +13,40 @@ pub enum ClientMessage {
     GetLobby,                           // "get_lobby"
     GetLeaderboard,                     // "get_leaderboard"
     Leave,                              // "leave"
+    Heartbeat,                          // "heartbeat"
 }
 
 /// Server → browser.
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMessage {
-    Welcome { player_id: String },                            // "welcome"
-    State { state: GameState },                               // "state"
-    PlayerJoined { player: LobbyPlayer },                     // "player_joined"
-    Lobby { players: Vec<LobbyPlayer> },                      // "lobby"
-    PlayerEliminated { player_id: String, state: GameState }, // "player_eliminated"
+    Welcome {
+        player_id: String,
+    }, // "welcome"
+    State {
+        state: GameState,
+    }, // "state"
+    PlayerJoined {
+        player: LobbyPlayer,
+    }, // "player_joined"
+    Lobby {
+        players: Vec<LobbyPlayer>,
+    }, // "lobby"
+    PlayerEliminated {
+        player_id: String,
+        state: GameState,
+    }, // "player_eliminated"
     /// `winner_id` is `None` (JSON `null`) for a draw.
-    GameOver { winner_id: Option<String>, state: GameState }, // "game_over"
-    Leaderboard { entries: Vec<LeaderboardEntry> },           // "leaderboard"
-    Error { message: String },                                // "error"
+    GameOver {
+        winner_id: Option<String>,
+        state: GameState,
+    }, // "game_over"
+    Leaderboard {
+        entries: Vec<LeaderboardEntry>,
+    }, // "leaderboard"
+    Error {
+        message: String,
+    }, // "error"
 }
 
 #[derive(Debug, Serialize)]
@@ -46,6 +65,8 @@ pub struct SnakeState {
     pub segments: Vec<Point>,
     pub alive: bool,
     pub score: u32,
+    /// Network disconnect; independent of in-game `alive`.
+    pub disconnected: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -53,6 +74,8 @@ pub struct LobbyPlayer {
     pub id: String,
     pub name: String,
     pub ready: bool,
+    /// Network disconnect; player stays in the list when true.
+    pub disconnected: bool,
 }
 
 #[derive(Debug, Serialize)]
