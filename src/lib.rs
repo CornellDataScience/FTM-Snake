@@ -1,6 +1,7 @@
 //! Game rules shared by the desktop client and the game server.
 pub mod apple;
 pub mod game;
+pub mod lobby;
 pub mod player;
 pub mod protocol;
 pub mod snake;
