@@ -128,10 +128,32 @@ button:hover {
   background: rgb(0 0 0 / 35%);
 }
 
-.overlay p {
-  margin: 0;
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   padding: 16px 24px;
   border-radius: 8px;
   background: #4a752c;
   font-size: 1.2rem;
+}
+
+.panel p {
+  margin: 0;
+}
+
+.lobby {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lobby ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lobby li.disconnected {
+  opacity: 0.5;
 }
