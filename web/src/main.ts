@@ -1,5 +1,5 @@
 import { ServerConnection } from "./connection";
-import type { Direction, GameState, ServerMessage } from "./protocol";
+import type { Direction, GameState, LobbyPlayer, ServerMessage } from "./protocol";
 import { EMPTY_BOARD, drawGame } from "./render";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -13,6 +13,9 @@ const score = $<HTMLSpanElement>("score");
 const playerName = $<HTMLSpanElement>("player-name");
 const overlay = $<HTMLDivElement>("overlay");
 const overlayText = $<HTMLParagraphElement>("overlay-text");
+const lobby = $<HTMLDivElement>("lobby");
+const lobbyList = $<HTMLUListElement>("lobby-list");
+const readyButton = $<HTMLButtonElement>("ready-button");
 const leaveButton = $<HTMLButtonElement>("leave-button");
 
 const KEY_DIRECTIONS: Record<string, Direction> = {
@@ -29,6 +32,8 @@ const KEY_DIRECTIONS: Record<string, Direction> = {
 let connection: ServerConnection | null = null;
 let playerId: string | null = null;
 let state: GameState = EMPTY_BOARD;
+/** Whether the server lists this player as ready. */
+let ready = false;
 
 joinForm.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -45,6 +50,8 @@ joinForm.addEventListener("submit", (event) => {
   });
   connection = current;
 });
+
+readyButton.addEventListener("click", () => connection?.send({ type: "set_ready", ready: !ready }));
 
 leaveButton.addEventListener("click", () => {
   connection?.close();
@@ -65,6 +72,10 @@ function handleMessage(message: ServerMessage): void {
   switch (message.type) {
     case "welcome":
       playerId = message.player_id;
+      showOverlay("Waiting for players", true);
+      break;
+    case "lobby":
+      showLobby(message.players);
       break;
     case "state": {
       state = message.state;
@@ -75,14 +86,38 @@ function handleMessage(message: ServerMessage): void {
       drawGame(canvas, state, playerId);
       break;
     }
+    case "game_over": {
+      state = message.state;
+      drawGame(canvas, state, playerId);
+      const winner = state.snakes.find((snake) => snake.id === message.winner_id);
+      const result = !winner ? "Draw!" : winner.id === playerId ? "You win!" : `${winner.name} wins!`;
+      showOverlay(result, true);
+      break;
+    }
     case "error":
       showOverlay(message.message);
       break;
   }
 }
 
-function showOverlay(text: string): void {
+function showLobby(players: LobbyPlayer[]): void {
+  lobbyList.replaceChildren(
+    ...players.map((player) => {
+      const item = document.createElement("li");
+      item.textContent = `${player.name}${player.id === playerId ? " (you)" : ""}${player.ready ? " ✓" : ""}`;
+      item.classList.toggle("disconnected", player.disconnected);
+      return item;
+    }),
+  );
+  ready = players.find((player) => player.id === playerId)?.ready ?? false;
+  readyButton.textContent = ready ? "Not ready" : "Ready";
+}
+
+/** Shows `text` over the board, with the lobby beneath it between games. */
+function showOverlay(text: string, withLobby = false): void {
   overlayText.textContent = text;
+  overlayText.hidden = !text;
+  lobby.hidden = !withLobby;
   overlay.hidden = false;
 }
 
