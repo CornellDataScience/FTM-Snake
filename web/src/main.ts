@@ -1,4 +1,4 @@
-import { ServerConnection } from "./connection";
+import { DEFAULT_SERVER_URL, resolveServerUrl, ServerConnection } from "./connection";
 import type { Direction, GameState, LobbyPlayer, ServerMessage } from "./protocol";
 import { EMPTY_BOARD, drawGame } from "./render";
 
@@ -7,6 +7,7 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const joinView = $<HTMLElement>("join-view");
 const joinForm = $<HTMLFormElement>("join-form");
 const nameInput = $<HTMLInputElement>("name-input");
+const lobbyIpInput = $<HTMLInputElement>("lobby-ip-input");
 const gameView = $<HTMLElement>("game-view");
 const canvas = $<HTMLCanvasElement>("board");
 const score = $<HTMLSpanElement>("score");
@@ -35,20 +36,33 @@ let state: GameState = EMPTY_BOARD;
 /** Whether the server lists this player as ready. */
 let ready = false;
 
+lobbyIpInput.value = DEFAULT_SERVER_URL;
+lobbyIpInput.addEventListener("input", () => lobbyIpInput.setCustomValidity(""));
+
 joinForm.addEventListener("submit", (event) => {
   event.preventDefault();
   const name = nameInput.value.trim();
   if (!name) return;
+  let current: ServerConnection;
+  try {
+    const serverUrl = resolveServerUrl(lobbyIpInput.value);
+    current = new ServerConnection(serverUrl, {
+      onOpen: () => connection === current && current.send({ type: "join", name }),
+      // Ignore events from a connection the player already left.
+      onMessage: (message) => connection === current && handleMessage(message),
+      onClose: () => connection === current && showOverlay("Disconnected from the game server"),
+    });
+  } catch (error) {
+    lobbyIpInput.setCustomValidity(
+      error instanceof Error ? error.message : "Enter a valid lobby address.",
+    );
+    lobbyIpInput.reportValidity();
+    return;
+  }
+  connection = current;
   playerName.textContent = name;
   showGame(true);
   showOverlay("Connecting…");
-  const current: ServerConnection = new ServerConnection({
-    onOpen: () => current.send({ type: "join", name }),
-    // Ignore events from a connection the player already left.
-    onMessage: (message) => connection === current && handleMessage(message),
-    onClose: () => connection === current && showOverlay("Disconnected from the game server"),
-  });
-  connection = current;
 });
 
 readyButton.addEventListener("click", () => connection?.send({ type: "set_ready", ready: !ready }));

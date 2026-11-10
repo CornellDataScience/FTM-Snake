@@ -82,8 +82,16 @@ npm run dev        # http://localhost:5173
 npm run build      # type-check and bundle into web/dist
 ```
 
-The client connects to `ws://localhost:8080` by default; override it with
-`VITE_SERVER_URL=ws://host:port npm run dev`. Messages are JSON, defined in
+The join page has a **Lobby IP** field below your name. Enter the server computer's
+IP or hostname (for example, `192.168.1.10`), optionally with a port
+(`192.168.1.10:8080`), or a full `ws://` / `wss://` URL. Bare hosts use port 8080.
+The field defaults to the page's hostname on port 8080, using `wss://` for HTTPS
+pages; override that initial value with `VITE_SERVER_URL=ws://host:port npm run dev`.
+To serve the frontend to other computers on your LAN, run
+`npm run dev -- --host 0.0.0.0` and open `http://<server-ip>:5173` on those computers. Run the WebSocket
+server on the selected host and allow its port through the host's firewall.
+
+Messages are JSON, defined in
 `web/src/protocol.ts`:
 
 - Client → server: `{"type":"join","name":"…"}`, `{"type":"direction","direction":"Up"}`

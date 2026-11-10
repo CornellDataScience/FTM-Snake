@@ -12,6 +12,9 @@
       <form id="join-form" class="card">
         <h1>FTM Snake</h1>
         <input id="name-input" maxlength="16" placeholder="Your name" autocomplete="off" required autofocus />
+        <label for="lobby-ip-input">Lobby IP</label>
+        <input id="lobby-ip-input" type="text" placeholder="192.168.1.10:8080" aria-describedby="lobby-ip-help" autocomplete="off" autocapitalize="none" spellcheck="false" required />
+        <small id="lobby-ip-help">Host IP or hostname, optional port (default 8080), or ws:// / wss:// URL.</small>
         <button type="submit">Play</button>
       </form>
     </main>

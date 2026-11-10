@@ -1,7 +1,28 @@
 import type { ClientMessage, ServerMessage } from "./protocol";
 
-// Override with `VITE_SERVER_URL=ws://host:port npm run dev`.
-const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string | undefined) ?? "ws://localhost:8080";
+// Use the page's host for LAN clients, unless a deployment supplies an override.
+export const DEFAULT_SERVER_URL =
+  (import.meta.env.VITE_SERVER_URL as string | undefined) ??
+  `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.hostname}:8080`;
+
+/** Accept a host, host:port, or a full WebSocket URL. */
+export function resolveServerUrl(address: string): string {
+  const value = address.trim();
+  if (!value) throw new Error("Enter a lobby IP or hostname.");
+
+  const hasScheme = value.includes("://");
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const url = new URL(hasScheme ? value : `${protocol}//${value}`);
+  if (url.protocol !== "ws:" && url.protocol !== "wss:") {
+    throw new Error("Use an IP, hostname, or a ws:// or wss:// URL.");
+  }
+  if (url.username || url.password || url.hash || value.includes("#")) {
+    throw new Error("Lobby addresses cannot include credentials or fragments.");
+  }
+  const hasPort = /:\d+$/.test(value.split(/[/?]/, 1)[0]);
+  if (!hasScheme && !hasPort) url.port = "8080";
+  return url.href;
+}
 
 const HEARTBEAT_INTERVAL_MS = 25;
 
@@ -16,8 +37,8 @@ export class ServerConnection {
   private socket: WebSocket;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(handlers: ConnectionHandlers) {
-    this.socket = new WebSocket(SERVER_URL);
+  constructor(serverUrl: string, handlers: ConnectionHandlers) {
+    this.socket = new WebSocket(serverUrl);
     this.socket.addEventListener("open", () => {
       this.startHeartbeat();
       handlers.onOpen();
