@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use apple_logic::{
     lobby::{self, Event},
     protocol::{ClientMessage, ServerMessage},
@@ -11,9 +13,14 @@ use axum::{
     response::Response,
     routing::any,
 };
-use tokio::sync::{mpsc, oneshot};
+use tokio::{
+    sync::{mpsc, oneshot},
+    time::{MissedTickBehavior, interval},
+};
 
 const ADDRESS: &str = "0.0.0.0:8080";
+/// A joined client silent for longer than this is marked disconnected.
+const HEARTBEAT_TIMEOUT: Duration = Duration::from_millis(50);
 /// Messages queued for one client before the game task starts dropping them.
 const OUTBOX_CAPACITY: usize = 64;
 const EVENT_CAPACITY: usize = 256;
@@ -45,7 +52,6 @@ async fn upgrade(upgrade: WebSocketUpgrade, State(game): State<GameHandle>) -> R
 /// Serves one client: waits for a join, then relays messages until it leaves.
 async fn handle(mut socket: WebSocket, game: GameHandle) {
     println!("client connected");
-    // TODO(heartbeats): detect clients that have gone silent.
     let (outbox, mut outbox_receiver) = mpsc::channel(OUTBOX_CAPACITY);
 
     let Some(player_id) = join(&mut socket, &game, outbox).await else {
@@ -54,16 +60,27 @@ async fn handle(mut socket: WebSocket, game: GameHandle) {
     };
     println!("player {player_id} joined");
 
-    // Each pass either reads one message from the client or writes one queued for it.
+    let mut last_heartbeat = Instant::now();
+    let mut timeout_check = interval(HEARTBEAT_TIMEOUT);
+    timeout_check.set_missed_tick_behavior(MissedTickBehavior::Skip);
+
+    // Each pass reads one message from the client, writes one queued for it,
+    // or checks that its heartbeats are still arriving.
     let left = loop {
         tokio::select! {
             text = next_text(&mut socket) => {
                 let Some(text) = text else { break false };
+                // Unreadable messages are skipped so a bad client cannot crash this task.
                 let Ok(message) = serde_json::from_str::<ClientMessage>(&text) else {
                     continue;
                 };
-                if let ClientMessage::Leave = message {
-                    break true;
+                match message {
+                    ClientMessage::Leave => break true,
+                    ClientMessage::Heartbeat => {
+                        last_heartbeat = Instant::now();
+                        continue;
+                    }
+                    _ => {}
                 }
                 let Some(event) = to_event(message, &player_id) else {
                     continue;
@@ -74,6 +91,12 @@ async fn handle(mut socket: WebSocket, game: GameHandle) {
             }
             Some(message) = outbox_receiver.recv() => {
                 if send(&mut socket, &message).await.is_err() {
+                    break false;
+                }
+            }
+            _ = timeout_check.tick() => {
+                if last_heartbeat.elapsed() > HEARTBEAT_TIMEOUT {
+                    println!("player {player_id} timed out");
                     break false;
                 }
             }
@@ -124,8 +147,12 @@ fn to_event(message: ClientMessage, player_id: &str) -> Option<Event> {
         }),
         ClientMessage::SetReady { ready } => Some(Event::SetReady { player_id, ready }),
         ClientMessage::GetLobby => Some(Event::GetLobby { player_id }),
-        // Already joined; `handle` deals with `leave`; the leaderboard is not decided yet.
-        ClientMessage::Join { .. } | ClientMessage::Leave | ClientMessage::GetLeaderboard => None,
+        // Already joined; `handle` deals with `leave` and `heartbeat`; the
+        // leaderboard is not decided yet.
+        ClientMessage::Join { .. }
+        | ClientMessage::Leave
+        | ClientMessage::Heartbeat
+        | ClientMessage::GetLeaderboard => None,
     }
 }
 

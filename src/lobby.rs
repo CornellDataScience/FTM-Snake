@@ -37,7 +37,7 @@ pub enum Event {
     Leave {
         player_id: String,
     },
-    /// The socket closed or failed without a `leave`.
+    /// The socket closed or failed, or heartbeats stopped, without a `leave`.
     Disconnected {
         player_id: String,
     },
@@ -48,6 +48,8 @@ struct Player {
     id: String,
     name: String,
     ready: bool,
+    /// Lost without a `leave`; the player stays listed so others can see it.
+    disconnected: bool,
     outbox: Outbox,
 }
 
@@ -57,6 +59,7 @@ impl Player {
             id: self.id.clone(),
             name: self.name.clone(),
             ready: self.ready,
+            disconnected: self.disconnected,
         }
     }
 
@@ -88,6 +91,7 @@ pub async fn run(mut events: mpsc::Receiver<Event>) {
                     id: next_id.to_string(),
                     name,
                     ready: false,
+                    disconnected: false,
                     outbox,
                 };
                 next_id += 1;
@@ -122,9 +126,15 @@ pub async fn run(mut events: mpsc::Receiver<Event>) {
                     player.notify(lobby(&players));
                 }
             }
-            Event::Leave { player_id } | Event::Disconnected { player_id } => {
-                // TODO: mid-round, a disconnected player's snake keeps moving until it dies.
+            Event::Leave { player_id } => {
                 players.retain(|p| p.id != player_id);
+                broadcast(&players, lobby(&players));
+            }
+            Event::Disconnected { player_id } => {
+                // TODO: mid-round, a disconnected player's snake keeps moving until it dies.
+                if let Some(player) = players.iter_mut().find(|p| p.id == player_id) {
+                    player.disconnected = true;
+                }
                 broadcast(&players, lobby(&players));
             }
         }

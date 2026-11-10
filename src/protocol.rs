@@ -13,6 +13,7 @@ pub enum ClientMessage {
     GetLobby,                           // "get_lobby"
     GetLeaderboard,                     // "get_leaderboard"
     Leave,                              // "leave"
+    Heartbeat,                          // "heartbeat"
 }
 
 /// Server → browser.
@@ -64,6 +65,8 @@ pub struct SnakeState {
     pub segments: Vec<Point>,
     pub alive: bool,
     pub score: u32,
+    /// Network disconnect; independent of in-game `alive`.
+    pub disconnected: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -71,6 +74,8 @@ pub struct LobbyPlayer {
     pub id: String,
     pub name: String,
     pub ready: bool,
+    /// Network disconnect; player stays in the list when true.
+    pub disconnected: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -16,6 +16,8 @@ export interface SnakeState {
   segments: Point[];
   alive: boolean;
   score: number;
+  /** Network disconnect; independent of in-game `alive`. */
+  disconnected: boolean;
 }
 
 export interface GameState {
@@ -29,6 +31,8 @@ export interface LobbyPlayer {
   id: string;
   name: string;
   ready: boolean;
+  /** Network disconnect; player stays in the list when true. */
+  disconnected: boolean;
 }
 
 export interface LeaderboardEntry {
@@ -42,7 +46,8 @@ export type ClientMessage =
   | { type: "set_ready"; ready: boolean }
   | { type: "get_lobby" }
   | { type: "get_leaderboard" }
-  | { type: "leave" };
+  | { type: "leave" }
+  | { type: "heartbeat" };
 
 export type ServerMessage =
   | { type: "welcome"; player_id: string }
