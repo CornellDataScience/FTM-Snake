@@ -95,7 +95,16 @@ button:hover {
 
 #player-name {
   flex: 1;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
   text-align: center;
+}
+
+.match-status {
+  margin: 0;
+  padding: 8px 16px;
+  background: #4a752c;
+  font-size: 0.85rem;
 }
 
 .icon-button {
@@ -136,6 +145,10 @@ button:hover {
   border-radius: 8px;
   background: #4a752c;
   font-size: 1.2rem;
+  max-inline-size: min(420px, 100%);
+  max-block-size: 100%;
+  overflow: auto;
+  overflow-wrap: anywhere;
 }
 
 .panel p {
@@ -146,12 +159,27 @@ button:hover {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-block-size: 0;
+}
+
+.lobby-summary {
+  font-size: 0.85rem;
 }
 
 .lobby ul {
   margin: 0;
   padding: 0;
   list-style: none;
+  max-block-size: 30dvh;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.lobby li {
+  border-inline-start: 5px solid transparent;
+  padding-inline-start: 8px;
+  margin-block: 6px;
 }
 
 .lobby li.disconnected {

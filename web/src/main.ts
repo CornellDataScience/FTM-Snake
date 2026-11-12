@@ -1,6 +1,6 @@
 import { DEFAULT_SERVER_URL, resolveServerUrl, ServerConnection } from "./connection";
 import type { Direction, GameState, LobbyPlayer, ServerMessage } from "./protocol";
-import { EMPTY_BOARD, drawGame } from "./render";
+import { EMPTY_BOARD, drawGame, playerColor } from "./render";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -12,10 +12,12 @@ const gameView = $<HTMLElement>("game-view");
 const canvas = $<HTMLCanvasElement>("board");
 const score = $<HTMLSpanElement>("score");
 const playerName = $<HTMLSpanElement>("player-name");
+const matchStatus = $<HTMLParagraphElement>("match-status");
 const overlay = $<HTMLDivElement>("overlay");
 const overlayText = $<HTMLParagraphElement>("overlay-text");
 const lobby = $<HTMLDivElement>("lobby");
 const lobbyList = $<HTMLUListElement>("lobby-list");
+const lobbySummary = $<HTMLParagraphElement>("lobby-summary");
 const readyButton = $<HTMLButtonElement>("ready-button");
 const leaveButton = $<HTMLButtonElement>("leave-button");
 
@@ -35,6 +37,7 @@ let playerId: string | null = null;
 let state: GameState = EMPTY_BOARD;
 /** Whether the server lists this player as ready. */
 let ready = false;
+let inRound = false;
 
 lobbyIpInput.value = DEFAULT_SERVER_URL;
 lobbyIpInput.addEventListener("input", () => lobbyIpInput.setCustomValidity(""));
@@ -75,7 +78,7 @@ leaveButton.addEventListener("click", () => {
 
 window.addEventListener("keydown", (event) => {
   const direction = KEY_DIRECTIONS[event.key];
-  if (!connection || !direction) return;
+  if (!connection || !direction || !inRound) return;
   event.preventDefault();
   connection.send({ type: "direction", direction });
 });
@@ -92,19 +95,18 @@ function handleMessage(message: ServerMessage): void {
       showLobby(message.players);
       break;
     case "state": {
-      state = message.state;
-      const me = state.snakes.find((snake) => snake.id === playerId);
-      score.textContent = String(me?.score ?? 0);
-      if (me && !me.alive) showOverlay("Game over");
-      else overlay.hidden = true;
-      drawGame(canvas, state, playerId);
+      inRound = true;
+      showState(message.state);
+      // Eliminated players can watch until the whole round finishes.
+      overlay.hidden = true;
       break;
     }
     case "game_over": {
-      state = message.state;
-      drawGame(canvas, state, playerId);
+      inRound = false;
+      showState(message.state);
       const winner = state.snakes.find((snake) => snake.id === message.winner_id);
       const result = !winner ? "Draw!" : winner.id === playerId ? "You win!" : `${winner.name} wins!`;
+      matchStatus.textContent = result;
       showOverlay(result, true);
       break;
     }
@@ -114,12 +116,25 @@ function handleMessage(message: ServerMessage): void {
   }
 }
 
+function showState(next: GameState): void {
+  state = next;
+  const me = state.snakes.find((snake) => snake.id === playerId);
+  const alive = state.snakes.filter((snake) => snake.alive).length;
+  score.textContent = String(me?.score ?? 0);
+  const status = `${alive}/${state.snakes.length} alive · ${state.width} × ${state.height} board`;
+  matchStatus.textContent = me && !me.alive ? `${status} · Eliminated — watching` : status;
+  drawGame(canvas, state, playerId);
+}
+
 function showLobby(players: LobbyPlayer[]): void {
+  const readyCount = players.filter((player) => player.ready).length;
+  lobbySummary.textContent = `${players.length} players · ${readyCount} ready. Starts when everyone is ready (minimum 2).`;
   lobbyList.replaceChildren(
     ...players.map((player) => {
       const item = document.createElement("li");
       item.textContent = `${player.name}${player.id === playerId ? " (you)" : ""}${player.ready ? " ✓" : ""}`;
       item.classList.toggle("disconnected", player.disconnected);
+      item.style.borderInlineStartColor = playerColor(player.id);
       return item;
     }),
   );
@@ -140,6 +155,9 @@ function showGame(inGame: boolean): void {
   gameView.hidden = !inGame;
   playerId = null;
   state = EMPTY_BOARD;
+  inRound = false;
+  ready = false;
+  matchStatus.textContent = "Join the lobby, then get ready. Your snake has a white outline.";
   score.textContent = "0";
   if (inGame) drawGame(canvas, state, playerId);
   else nameInput.focus();

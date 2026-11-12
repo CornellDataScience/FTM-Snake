@@ -7,19 +7,34 @@ use crate::{Point, player::Direction};
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ClientMessage {
-    Join { name: String },              // "join"
-    Direction { direction: Direction }, // "direction"
-    SetReady { ready: bool },           // "set_ready"
-    GetLobby,                           // "get_lobby"
-    GetLeaderboard,                     // "get_leaderboard"
-    Leave,                              // "leave"
-    Heartbeat,                          // "heartbeat"
+    Join {
+        name: String,
+    }, // "join"
+    Direction {
+        direction: Direction,
+        /// Stable across client retries; old clients may omit it.
+        #[serde(default)]
+        sequence: Option<u64>,
+    }, // "direction"
+    SetReady {
+        ready: bool,
+    }, // "set_ready"
+    GetLobby,       // "get_lobby"
+    GetLeaderboard, // "get_leaderboard"
+    Leave,          // "leave"
+    Heartbeat,      // "heartbeat"
 }
 
 /// Server → browser.
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMessage {
+    /// Emitted only after the input's chosen batch has been applied.
+    InputApplied {
+        sequence: u64,
+        tick: u64,
+        duplicate: bool,
+    },
     Welcome {
         player_id: String,
     }, // "welcome"

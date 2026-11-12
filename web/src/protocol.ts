@@ -42,7 +42,7 @@ export interface LeaderboardEntry {
 
 export type ClientMessage =
   | { type: "join"; name: string }
-  | { type: "direction"; direction: Direction }
+  | { type: "direction"; direction: Direction; sequence?: number }
   | { type: "set_ready"; ready: boolean }
   | { type: "get_lobby" }
   | { type: "get_leaderboard" }
@@ -50,6 +50,7 @@ export type ClientMessage =
   | { type: "heartbeat" };
 
 export type ServerMessage =
+  | { type: "input_applied"; sequence: number; tick: number; duplicate: boolean }
   | { type: "welcome"; player_id: string }
   | { type: "state"; state: GameState }
   | { type: "player_joined"; player: LobbyPlayer }

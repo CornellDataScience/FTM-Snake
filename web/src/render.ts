@@ -5,13 +5,16 @@ const LIGHT_TILE = "#aad751";
 const DARK_TILE = "#a2d149";
 const APPLE = "#e7471d";
 const LEAF = "#4a752c";
-const PLAYER = "#4e7cf6";
-const OPPONENT = "#b048f0";
 const EYE = "#ffffff";
 const PUPIL = "#1a1a1a";
 
 /** Shown before the server sends its first state. */
 export const EMPTY_BOARD: GameState = { width: 25, height: 25, snakes: [], apples: [] };
+
+/** Stable colors for server-assigned numeric IDs, with no fixed palette limit. */
+export function playerColor(id: string): string {
+  return `hsl(${(Number(id) * 137.508) % 360} 70% 45%)`;
+}
 
 export function drawGame(canvas: HTMLCanvasElement, state: GameState, playerId: string | null): void {
   const ctx = canvas.getContext("2d");
@@ -48,7 +51,7 @@ export function drawGame(canvas: HTMLCanvasElement, state: GameState, playerId: 
 
   for (const snake of state.snakes) {
     if (snake.segments.length === 0) continue;
-    const color = snake.id === playerId ? PLAYER : OPPONENT;
+    const color = playerColor(snake.id);
     ctx.globalAlpha = snake.alive ? 1 : 0.4;
     ctx.strokeStyle = color;
     ctx.lineWidth = cell * 0.7;
@@ -61,6 +64,14 @@ export function drawGame(canvas: HTMLCanvasElement, state: GameState, playerId: 
       else ctx.lineTo(cx, cy);
     }
     if (snake.segments.length === 1) ctx.lineTo(...center(snake.segments[0]));
+    // Identify your snake independently of its color.
+    if (snake.id === playerId) {
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = cell * 0.9;
+      ctx.stroke();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = cell * 0.7;
+    }
     ctx.stroke();
     drawEyes(ctx, snake.segments, center, cell);
     ctx.globalAlpha = 1;

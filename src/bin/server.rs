@@ -1,6 +1,8 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use apple_logic::{
+    config::GameConfig,
+    consensus::types::{ClientRequestId, PlayerInput},
     lobby::{self, Event},
     protocol::{ClientMessage, ServerMessage},
 };
@@ -15,12 +17,12 @@ use axum::{
 };
 use tokio::{
     sync::{mpsc, oneshot},
-    time::{MissedTickBehavior, interval},
+    time::{Instant, sleep_until},
 };
 
 const ADDRESS: &str = "0.0.0.0:8080";
-/// A joined client silent for longer than this is marked disconnected.
-const HEARTBEAT_TIMEOUT: Duration = Duration::from_millis(50);
+/// A joined client with no heartbeat for this long is marked disconnected.
+const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(1);
 /// Messages queued for one client before the game task starts dropping them.
 const OUTBOX_CAPACITY: usize = 64;
 const EVENT_CAPACITY: usize = 256;
@@ -31,14 +33,38 @@ type GameHandle = mpsc::Sender<Event>;
 /// Sets up the server
 #[tokio::main]
 async fn main() {
+    let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.iter().any(|arg| arg == "--help" || arg == "-h") {
+        println!(
+            "Usage: server [--width 25] [--height 25] [--apples 3]\n\
+                  Dimensions are in cells. Each player gets a 5 x 5 starting area.\n\
+                  A round starts when at least two players join and everyone is ready."
+        );
+        return;
+    }
+    let config = GameConfig::from_args(args).unwrap_or_else(|error| {
+        eprintln!("{error}\nRun with --help for usage.");
+        std::process::exit(2);
+    });
+    println!(
+        "Board: {} x {}, apples: {}, player capacity: {}",
+        config.board.width,
+        config.board.height,
+        config.apple_count,
+        config.player_capacity()
+    );
+    println!(
+        "Agreement: local single-node adapter (no distributed fault tolerance), target 30 ticks/s"
+    );
     let (events, event_receiver) = mpsc::channel(EVENT_CAPACITY);
-    tokio::spawn(lobby::run(event_receiver));
+    tokio::spawn(lobby::run(event_receiver, config));
 
     let app = Router::new().route("/", any(upgrade)).with_state(events);
-    let listener = tokio::net::TcpListener::bind(ADDRESS)
+    let address = std::env::var("SNAKE_BIND_ADDRESS").unwrap_or_else(|_| ADDRESS.to_string());
+    let listener = tokio::net::TcpListener::bind(&address)
         .await
-        .unwrap_or_else(|error| panic!("cannot bind {ADDRESS}: {error}"));
-    println!("listening on ws://{ADDRESS}");
+        .unwrap_or_else(|error| panic!("cannot bind {address}: {error}"));
+    println!("listening on ws://{address}");
     axum::serve(listener, app)
         .await
         .expect("the server stopped");
@@ -61,8 +87,7 @@ async fn handle(mut socket: WebSocket, game: GameHandle) {
     println!("player {player_id} joined");
 
     let mut last_heartbeat = Instant::now();
-    let mut timeout_check = interval(HEARTBEAT_TIMEOUT);
-    timeout_check.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    let mut next_sequence = 0;
 
     // Each pass reads one message from the client, writes one queued for it,
     // or checks that its heartbeats are still arriving.
@@ -82,7 +107,7 @@ async fn handle(mut socket: WebSocket, game: GameHandle) {
                     }
                     _ => {}
                 }
-                let Some(event) = to_event(message, &player_id) else {
+                let Some(event) = to_event(message, &player_id, &mut next_sequence) else {
                     continue;
                 };
                 if game.send(event).await.is_err() {
@@ -94,11 +119,10 @@ async fn handle(mut socket: WebSocket, game: GameHandle) {
                     break false;
                 }
             }
-            _ = timeout_check.tick() => {
-                if last_heartbeat.elapsed() > HEARTBEAT_TIMEOUT {
-                    println!("player {player_id} timed out");
-                    break false;
-                }
+            // Only a heartbeat extends this deadline; other traffic does not.
+            _ = sleep_until(last_heartbeat + HEARTBEAT_TIMEOUT) => {
+                println!("player {player_id} timed out");
+                break false;
             }
         }
     };
@@ -138,13 +162,23 @@ async fn join(socket: &mut WebSocket, game: &GameHandle, outbox: lobby::Outbox) 
 
 /// The game event for a joined player's message, or `None` for messages the
 /// game task does not handle yet.
-fn to_event(message: ClientMessage, player_id: &str) -> Option<Event> {
+fn to_event(message: ClientMessage, player_id: &str, next_sequence: &mut u64) -> Option<Event> {
     let player_id = player_id.to_string();
     match message {
-        ClientMessage::Direction { direction } => Some(Event::Direction {
-            player_id,
+        ClientMessage::Direction {
             direction,
-        }),
+            sequence,
+        } => {
+            let sequence = sequence.unwrap_or(*next_sequence);
+            *next_sequence = (*next_sequence).max(sequence.checked_add(1)?);
+            Some(Event::Input(PlayerInput {
+                request_id: ClientRequestId {
+                    client_id: player_id,
+                    sequence,
+                },
+                direction,
+            }))
+        }
         ClientMessage::SetReady { ready } => Some(Event::SetReady { player_id, ready }),
         ClientMessage::GetLobby => Some(Event::GetLobby { player_id }),
         // Already joined; `handle` deals with `leave` and `heartbeat`; the

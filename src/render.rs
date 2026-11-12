@@ -1,5 +1,5 @@
 use apple_logic::{
-    PLAYER_COUNT, Point,
+    LOCAL_PLAYER_COUNT, Point,
     game::{Game, Status},
 };
 use macroquad::prelude::*;
@@ -7,7 +7,7 @@ use macroquad::prelude::*;
 const BOARD_MARGIN: f32 = 10.0;
 const FONT_SIZE: f32 = 32.0;
 /// Body and head colors per player.
-const SNAKE_COLORS: [(Color, Color); PLAYER_COUNT] = [(LIME, DARKGREEN), (SKYBLUE, DARKBLUE)];
+const SNAKE_COLORS: [(Color, Color); LOCAL_PLAYER_COUNT] = [(LIME, DARKGREEN), (SKYBLUE, DARKBLUE)];
 const DEAD_COLORS: (Color, Color) = (GRAY, DARKGRAY);
 /// Particles spiral in for `COLLAPSE_SECONDS`, then a flash lasts until
 /// `IMPLOSION_SECONDS`, after which the result is shown.

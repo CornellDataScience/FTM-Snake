@@ -1,9 +1,9 @@
 import type { ClientMessage, ServerMessage } from "./protocol";
 
-// Use the page's host for LAN clients, unless a deployment supplies an override.
+// Vite forwards /ws to Rust, so local, LAN, and tunnel clients share one origin.
 export const DEFAULT_SERVER_URL =
   (import.meta.env.VITE_SERVER_URL as string | undefined) ??
-  `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.hostname}:8080`;
+  `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws`;
 
 /** Accept a host, host:port, or a full WebSocket URL. */
 export function resolveServerUrl(address: string): string {
@@ -36,6 +36,7 @@ export interface ConnectionHandlers {
 export class ServerConnection {
   private socket: WebSocket;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private nextSequence = 0;
 
   constructor(serverUrl: string, handlers: ConnectionHandlers) {
     this.socket = new WebSocket(serverUrl);
@@ -56,6 +57,11 @@ export class ServerConnection {
   /** Sends a protocol message if the socket is still open. */
   send(message: ClientMessage): void {
     if (this.socket.readyState === WebSocket.OPEN) {
+      if (message.type === "direction") {
+        const sequence = message.sequence ?? this.nextSequence;
+        this.nextSequence = Math.max(this.nextSequence, sequence + 1);
+        message = { ...message, sequence };
+      }
       this.socket.send(JSON.stringify(message));
     }
   }

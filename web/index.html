@@ -26,13 +26,15 @@
           <span id="player-name"></span>
           <button id="leave-button" class="icon-button" title="Leave">✕</button>
         </header>
+        <p id="match-status" class="match-status" role="status"></p>
         <div class="board-wrap">
           <canvas id="board"></canvas>
           <div id="overlay" class="overlay">
             <div class="panel">
               <p id="overlay-text"></p>
               <div id="lobby" class="lobby" hidden>
-                <ul id="lobby-list"></ul>
+                <p id="lobby-summary" class="lobby-summary"></p>
+                <ul id="lobby-list" tabindex="0" aria-label="Players in the lobby"></ul>
                 <button id="ready-button">Ready</button>
               </div>
             </div>

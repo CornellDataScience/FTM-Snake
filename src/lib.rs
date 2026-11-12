@@ -1,5 +1,7 @@
 //! Game rules shared by the desktop client and the game server.
 pub mod apple;
+pub mod config;
+pub mod consensus;
 pub mod game;
 pub mod lobby;
 pub mod player;
@@ -8,9 +10,9 @@ pub mod snake;
 
 pub type Point = (i16, i16);
 
-/// Number of snakes in a match.
-pub const PLAYER_COUNT: usize = 2;
-/// Apples kept on the board while free cells remain.
+/// Keyboard-controlled players in the desktop demo, not a network player limit.
+pub const LOCAL_PLAYER_COUNT: usize = 2;
+/// Default apples kept on the board while free cells remain.
 pub const APPLE_COUNT: usize = 3;
 
 #[derive(Debug, Clone, Copy)]
