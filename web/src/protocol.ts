@@ -35,17 +35,10 @@ export interface LobbyPlayer {
   disconnected: boolean;
 }
 
-export interface LeaderboardEntry {
-  name: string;
-  score: number;
-}
-
 export type ClientMessage =
   | { type: "join"; name: string }
   | { type: "direction"; direction: Direction; sequence?: number }
   | { type: "set_ready"; ready: boolean }
-  | { type: "get_lobby" }
-  | { type: "get_leaderboard" }
   | { type: "leave" }
   | { type: "heartbeat" };
 
@@ -53,17 +46,10 @@ export type ServerMessage =
   | { type: "input_applied"; sequence: number; tick: number; duplicate: boolean }
   | { type: "welcome"; player_id: string }
   | { type: "state"; state: GameState }
-  | { type: "player_joined"; player: LobbyPlayer }
   | { type: "lobby"; players: LobbyPlayer[] }
-  | {
-      type: "player_eliminated";
-      player_id: string;
-      state: GameState;
-    }
   | {
       type: "game_over";
       winner_id: string | null;
       state: GameState;
     }
-  | { type: "leaderboard"; entries: LeaderboardEntry[] }
   | { type: "error"; message: string };

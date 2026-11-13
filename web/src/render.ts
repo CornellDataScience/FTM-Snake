@@ -11,9 +11,15 @@ const PUPIL = "#1a1a1a";
 /** Shown before the server sends its first state. */
 export const EMPTY_BOARD: GameState = { width: 25, height: 25, snakes: [], apples: [] };
 
-/** Stable colors for server-assigned numeric IDs, with no fixed palette limit. */
+/** A stable color for any player ID, with no fixed palette limit. */
 export function playerColor(id: string): string {
-  return `hsl(${(Number(id) * 137.508) % 360} 70% 45%)`;
+  // Numeric IDs step by the golden angle so consecutive players look distinct.
+  let key = Number(id);
+  if (!Number.isInteger(key)) {
+    key = 0;
+    for (const char of id) key = (key * 31 + char.charCodeAt(0)) >>> 0;
+  }
+  return `hsl(${(key * 137.508) % 360} 70% 45%)`;
 }
 
 export function drawGame(canvas: HTMLCanvasElement, state: GameState, playerId: string | null): void {

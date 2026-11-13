@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "tunnel": "cloudflared tunnel --url http://127.0.0.1:5173 --http-host-header localhost:5173",
+    "tunnel": "cloudflared tunnel --url http://127.0.0.1:5180 --http-host-header localhost:5180",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "typecheck": "tsc"

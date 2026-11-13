@@ -3,8 +3,8 @@ import { defineConfig } from "vite";
 export default defineConfig({
   server: {
     host: "127.0.0.1",
-    port: 5173,
-    // The tunnel must never silently point at a different app on port 5173.
+    port: 5180,
+    // The tunnel must never silently point at a different app on port 5180.
     strictPort: true,
     proxy: {
       "/ws": {
