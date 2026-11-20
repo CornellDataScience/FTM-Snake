@@ -1,17 +1,17 @@
-//! Group 2 execution boundary: the ONLY path from chosen log values to Game.
+//! Replica execution (Week 6): state, slot_num and decisions.
+//! Decisions may arrive out of order; execute only the contiguous prefix.
 use std::collections::{BTreeMap, HashMap};
-
-use rand::{SeedableRng, rngs::StdRng};
 
 use super::types::*;
 use crate::{
     config::GameConfig,
     game::{Game, Status},
+    round::Round,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ApplyError {
-    ConflictingSlot(LogSlot),
+pub enum ExecutionError {
+    ConflictingSlot(Slot),
     WrongTick {
         expected: GameTick,
         received: GameTick,
@@ -28,65 +28,56 @@ pub struct ClientResult {
 }
 
 #[derive(Debug)]
-pub struct AppliedEntry {
-    pub slot: LogSlot,
+pub struct ExecutedSlot {
+    pub slot: Slot,
     pub tick: Option<GameTick>,
     pub results: Vec<ClientResult>,
 }
 
-pub struct GameAdapter {
-    game: Game,
-    owners: Vec<String>,
-    rng: StdRng,
-    next_slot: u64,
+pub struct Replica {
+    round: Round,
+    slot_num: u64,
     next_tick: u64,
-    /// Keep applied values too, so a conflicting duplicate is detectable.
-    log: BTreeMap<LogSlot, LogValue>,
+    /// Keep executed values too, so a conflicting duplicate is detectable.
+    decisions: BTreeMap<Slot, Command>,
     requests: HashMap<ClientRequestId, GameTick>,
 }
 
-impl GameAdapter {
+impl Replica {
     /// All replicas must start with the SAME config, ordered roster and seed,
     /// and the same binary/dependency versions (StdRng is not a stable wire RNG).
     /// Match setup is external metadata, not inferred from local arrival times.
     pub fn new(config: GameConfig, owners: Vec<String>, seed: u64) -> Result<Self, String> {
-        if owners
-            .iter()
-            .collect::<std::collections::HashSet<_>>()
-            .len()
-            != owners.len()
-        {
-            return Err("Player IDs must be unique".into());
-        }
-        let mut rng = StdRng::seed_from_u64(seed);
-        let game = Game::with_config(config, owners.len(), &mut rng)?;
         Ok(Self {
-            game,
-            owners,
-            rng,
-            next_slot: 0,
+            round: Round::new(config, owners, seed)?,
+            slot_num: 0,
             next_tick: 0,
-            log: BTreeMap::new(),
+            decisions: BTreeMap::new(),
             requests: HashMap::new(),
         })
     }
 
     pub fn game(&self) -> &Game {
-        &self.game
+        self.round.game()
     }
     pub fn owners(&self) -> &[String] {
-        &self.owners
+        self.round.owners()
     }
+    /// Next slot to execute (the notes' slot_num / slot_out).
+    pub fn slot_num(&self) -> Slot {
+        Slot(self.slot_num)
+    }
+
     pub fn next_tick(&self) -> GameTick {
         GameTick(self.next_tick)
     }
-    pub fn applied_through(&self) -> Option<LogSlot> {
-        self.next_slot.checked_sub(1).map(LogSlot)
+    pub fn executed_through(&self) -> Option<Slot> {
+        self.slot_num.checked_sub(1).map(Slot)
     }
-    pub fn has_applied(&self, request: &ClientRequestId) -> bool {
+    pub fn has_executed(&self, request: &ClientRequestId) -> bool {
         self.requests.contains_key(request)
     }
-    /// A retry may get a cached success only after the original was applied.
+    /// A retry may get a cached success only after the original was executed.
     pub fn result_for(&self, request: &ClientRequestId) -> Option<ClientResult> {
         self.requests.get(request).map(|&tick| ClientResult {
             request_id: request.clone(),
@@ -95,58 +86,55 @@ impl GameAdapter {
         })
     }
     pub fn finished(&self) -> bool {
-        self.game.status() != Status::Running
+        self.game().status() != Status::Running
     }
 
     /// Buffer gaps, ignore identical duplicates, reject conflicting decisions.
     /// Validate the contiguous prefix before changing the game, so errors cannot
-    /// hide receipts from entries applied earlier in the same call.
-    pub fn receive_chosen(&mut self, entry: ChosenEntry) -> Result<Vec<AppliedEntry>, ApplyError> {
-        if let Some(value) = self.log.get(&entry.slot) {
-            if value != &entry.value {
-                return Err(ApplyError::ConflictingSlot(entry.slot));
+    /// hide receipts from entries executed earlier in the same call.
+    pub fn on_decision(&mut self, entry: Decision) -> Result<Vec<ExecutedSlot>, ExecutionError> {
+        if let Some(command) = self.decisions.get(&entry.slot) {
+            if command != &entry.command {
+                return Err(ExecutionError::ConflictingSlot(entry.slot));
             }
         } else {
-            self.log.insert(entry.slot, entry.value);
+            self.decisions.insert(entry.slot, entry.command);
         }
         let mut prefix = Vec::new();
         let mut expected_tick = self.next_tick;
-        let mut slot = self.next_slot;
-        while let Some(value) = self.log.get(&LogSlot(slot)) {
-            if let LogValue::Tick(batch) = value {
+        let mut slot = self.slot_num;
+        while let Some(command) = self.decisions.get(&Slot(slot)) {
+            if let Command::Tick(batch) = command {
                 if batch.tick != GameTick(expected_tick) {
-                    return Err(ApplyError::WrongTick {
+                    return Err(ExecutionError::WrongTick {
                         expected: GameTick(expected_tick),
                         received: batch.tick,
                     });
                 }
                 for input in &batch.inputs {
-                    if !self.owners.contains(&input.request_id.client_id) {
-                        return Err(ApplyError::UnknownPlayer(
+                    if self.round.snake_of(&input.request_id.client_id).is_none() {
+                        return Err(ExecutionError::UnknownPlayer(
                             input.request_id.client_id.clone(),
                         ));
                     }
                 }
                 expected_tick += 1;
             }
-            prefix.push((LogSlot(slot), value.clone()));
+            prefix.push((Slot(slot), command.clone()));
             slot += 1;
         }
-        let mut applied = Vec::new();
-        for (slot, value) in prefix {
+        let mut executed = Vec::new();
+        for (slot, command) in prefix {
             let mut results = Vec::new();
-            let tick = match value {
-                LogValue::Noop => None,
-                LogValue::Tick(batch) => {
+            let tick = match command {
+                Command::Noop => None,
+                Command::Tick(batch) => {
                     for input in batch.inputs {
                         let old_tick = self.requests.get(&input.request_id).copied();
                         if old_tick.is_none() {
-                            let player = self
-                                .owners
-                                .iter()
-                                .position(|id| *id == input.request_id.client_id)
-                                .expect("validated roster");
-                            self.game.set_direction(player, input.direction);
+                            // The roster was validated above.
+                            self.round
+                                .set_direction(&input.request_id.client_id, input.direction);
                             self.requests.insert(input.request_id.clone(), batch.tick);
                         }
                         results.push(ClientResult {
@@ -155,18 +143,18 @@ impl GameAdapter {
                             duplicate: old_tick.is_some(),
                         });
                     }
-                    self.game.tick(&mut self.rng);
+                    self.round.tick();
                     self.next_tick += 1;
                     Some(batch.tick)
                 }
             };
-            self.next_slot += 1;
-            applied.push(AppliedEntry {
+            self.slot_num += 1;
+            executed.push(ExecutedSlot {
                 slot,
                 tick,
                 results,
             });
         }
-        Ok(applied)
+        Ok(executed)
     }
 }

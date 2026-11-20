@@ -15,18 +15,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
-name = "apple_logic"
-version = "0.1.0"
-dependencies = [
- "axum",
- "macroquad",
- "rand 0.8.8",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -262,6 +250,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "ftm_snake"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "macroquad",
+ "rand 0.8.8",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

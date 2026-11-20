@@ -1,5 +1,5 @@
 //! Group 2: batch formation. Closing transfers inputs to the caller, who MUST
-//! retain that batch until applied or reconciled after authoritative recovery.
+//! retain that batch until executed or reconciled after authoritative recovery.
 use std::collections::{HashSet, VecDeque};
 
 use super::types::{ClientRequestId, GameTick, PlayerInput, TickBatch};
@@ -31,7 +31,7 @@ impl InputBatcher {
         }
     }
 
-    pub fn discard_applied(&mut self, mut is_applied: impl FnMut(&ClientRequestId) -> bool) {
-        self.inputs.retain(|input| !is_applied(&input.request_id));
+    pub fn discard_executed(&mut self, mut is_executed: impl FnMut(&ClientRequestId) -> bool) {
+        self.inputs.retain(|input| !is_executed(&input.request_id));
     }
 }

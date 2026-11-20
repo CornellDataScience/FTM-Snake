@@ -12,24 +12,23 @@ pub enum ClientMessage {
     }, // "join"
     Direction {
         direction: Direction,
-        /// Stable across client retries; old clients may omit it.
+        /// Reserved for replicated-mode retries; NONE ignores it.
         #[serde(default)]
         sequence: Option<u64>,
     }, // "direction"
     SetReady {
         ready: bool,
     }, // "set_ready"
-    GetLobby,       // "get_lobby"
-    GetLeaderboard, // "get_leaderboard"
-    Leave,          // "leave"
-    Heartbeat,      // "heartbeat"
+    Leave,     // "leave"
+    Heartbeat, // "heartbeat"
 }
 
 /// Server → browser.
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMessage {
-    /// Emitted only after the input's chosen batch has been applied.
+    /// Reserved for replicated modes, after a chosen batch has been applied.
+    /// The standalone server does not emit consensus receipts.
     InputApplied {
         sequence: u64,
         tick: u64,
@@ -41,24 +40,14 @@ pub enum ServerMessage {
     State {
         state: GameState,
     }, // "state"
-    PlayerJoined {
-        player: LobbyPlayer,
-    }, // "player_joined"
     Lobby {
         players: Vec<LobbyPlayer>,
     }, // "lobby"
-    PlayerEliminated {
-        player_id: String,
-        state: GameState,
-    }, // "player_eliminated"
     /// `winner_id` is `None` (JSON `null`) for a draw.
     GameOver {
         winner_id: Option<String>,
         state: GameState,
     }, // "game_over"
-    Leaderboard {
-        entries: Vec<LeaderboardEntry>,
-    }, // "leaderboard"
     Error {
         message: String,
     }, // "error"
@@ -91,10 +80,4 @@ pub struct LobbyPlayer {
     pub ready: bool,
     /// Network disconnect; player stays in the list when true.
     pub disconnected: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct LeaderboardEntry {
-    pub name: String,
-    pub score: u32,
 }

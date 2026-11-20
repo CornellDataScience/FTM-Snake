@@ -1,64 +1,61 @@
-//! ONE shared state instance per acceptor, borrowed by both protocol groups.
-//! This memory-only scaffold assumes crash-stop: a lost instance must never
-//! rejoin the same log under the same identity. Restart recovery requires durable
-//! promise/accept writes BEFORE sending Promise/Accepted responses.
+//! The acceptor's ballot and accepted p-values, owned once by PaxosServer.
+//! Memory-only, crash-stop: restart cannot safely rejoin the old log. Durable
+//! writes would be required BEFORE P1b/P2b replies for restart recovery.
 use std::collections::BTreeMap;
 
-use super::types::{AcceptedEntry, AcceptedHistory, Ballot, LogSlot};
+use super::types::{AcceptedHistory, Ballot, PValue, Slot};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AcceptorError {
-    Preempted(Ballot),
-    ConflictingValue,
+    BallotMismatch { current: Option<Ballot> },
+    ConflictingCommand,
 }
 
 #[derive(Default)]
 pub struct AcceptorState {
-    promised: Option<Ballot>,
-    accepted: BTreeMap<LogSlot, AcceptedEntry>,
+    ballot: Option<Ballot>,
+    accepted: BTreeMap<Slot, PValue>,
 }
 
 impl AcceptorState {
-    pub fn promised(&self) -> Option<Ballot> {
-        self.promised
+    pub fn ballot(&self) -> Option<Ballot> {
+        self.ballot
     }
 
-    /// Prepare contract: reject lower ballots; persist the promise before reply.
-    /// Equal-ballot retries are idempotent. This implementation has no pagination.
-    pub fn promise(&mut self, ballot: Ballot) -> Result<AcceptedHistory, AcceptorError> {
-        self.check_ballot(ballot)?;
-        self.promised = Some(ballot);
+    /// P1a: adopt a higher ballot, or repeat the reply for the same ballot.
+    /// Return accepted p-values for P1b. Lower ballots cannot change this state.
+    pub fn on_p1a(&mut self, ballot: Ballot) -> Result<AcceptedHistory, AcceptorError> {
+        if self.ballot.is_some_and(|current| ballot < current) {
+            return Err(AcceptorError::BallotMismatch {
+                current: self.ballot,
+            });
+        }
+        self.ballot = Some(ballot);
         Ok(AcceptedHistory::Complete(
             self.accepted.values().cloned().collect(),
         ))
     }
 
-    /// Accept contract: ballot >= promise, and no different value for the SAME
-    /// ballot+slot. A higher ballot may replace the value only because its leader
-    /// obeys Phase 1 recovery. Update BOTH promise and accepted state before ack.
-    pub fn accept(&mut self, entry: AcceptedEntry) -> Result<(), AcceptorError> {
-        self.check_ballot(entry.ballot)?;
-        if let Some(old) = self.accepted.get(&entry.slot)
-            && old.ballot == entry.ballot
-            && old.value != entry.value
-        {
-            return Err(AcceptorError::ConflictingValue);
+    /// P2a: accept only when its ballot EQUALS the adopted ballot (Section 4,
+    /// slide 34). A higher-ballot P2a must not implicitly perform phase 1.
+    /// Same-ballot/slot retries must also carry the same command.
+    pub fn on_p2a(&mut self, pvalue: PValue) -> Result<(), AcceptorError> {
+        if self.ballot != Some(pvalue.ballot) {
+            return Err(AcceptorError::BallotMismatch {
+                current: self.ballot,
+            });
         }
-        self.promised = Some(entry.ballot);
-        self.accepted.insert(entry.slot, entry);
+        if let Some(old) = self.accepted.get(&pvalue.slot)
+            && old.ballot == pvalue.ballot
+            && old.command != pvalue.command
+        {
+            return Err(AcceptorError::ConflictingCommand);
+        }
+        self.accepted.insert(pvalue.slot, pvalue);
         Ok(())
     }
 
-    pub fn accepted(&self, slot: LogSlot) -> Option<&AcceptedEntry> {
+    pub fn accepted(&self, slot: Slot) -> Option<&PValue> {
         self.accepted.get(&slot)
-    }
-
-    fn check_ballot(&self, ballot: Ballot) -> Result<(), AcceptorError> {
-        if let Some(promised) = self.promised
-            && ballot < promised
-        {
-            return Err(AcceptorError::Preempted(promised));
-        }
-        Ok(())
     }
 }

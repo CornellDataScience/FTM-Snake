@@ -1,4 +1,4 @@
-use apple_logic::{LOCAL_PLAYER_COUNT, player::Direction};
+use ftm_snake::{LOCAL_PLAYER_COUNT, player::Direction};
 use macroquad::prelude::{KeyCode, is_key_pressed};
 
 /// Player 1 steers with WASD, player 2 with the arrow keys.

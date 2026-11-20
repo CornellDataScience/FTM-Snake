@@ -1,38 +1,52 @@
+//! Two-player desktop game on a fixed-rate tick clock.
+//! Player 1 steers with WASD, player 2 with the arrow keys; Space restarts.
 mod input;
 mod render;
 
-use apple_logic::game::{Game, Status};
-use macroquad::prelude::{get_time, next_frame};
+use ftm_snake::game::{Game, Status};
+use macroquad::prelude::{get_frame_time, get_time, next_frame};
 
-const MOVE_INTERVAL_SECONDS: f64 = 0.10;
+const TICK_SECONDS: f64 = 0.10;
+/// Longest frame gap credited to the tick clock, so a stalled window does not
+/// replay a burst of moves when it resumes.
+const MAX_FRAME_SECONDS: f64 = 0.25;
 
 #[macroquad::main("FTM Snake")]
 async fn main() {
     let mut rng = rand::thread_rng();
     let mut game = Game::new(&mut rng);
-    let mut last_move_time = get_time();
+    let mut pending = 0.0;
     let mut ended_at = None;
 
     loop {
+        if input::restart_pressed() {
+            game = Game::new(&mut rng);
+            pending = 0.0;
+            ended_at = None;
+        }
         for (player, direction) in input::read_directions().into_iter().enumerate() {
             if let Some(direction) = direction {
                 game.set_direction(player, direction);
             }
         }
-        if game.status() != Status::Running && input::restart_pressed() {
-            game = Game::new(&mut rng);
-            last_move_time = get_time();
-            ended_at = None;
-        }
-        let now = get_time();
-        if now - last_move_time >= MOVE_INTERVAL_SECONDS {
+        for _ in 0..due_ticks(&mut pending, f64::from(get_frame_time())) {
             if game.tick(&mut rng) != Status::Running && ended_at.is_none() {
-                ended_at = Some(now);
+                ended_at = Some(get_time());
             }
-            last_move_time = now;
         }
         let since_end = ended_at.map(|time| (get_time() - time) as f32);
         render::draw_game(&game, since_end);
         next_frame().await;
     }
+}
+
+/// Adds one frame's duration to the tick clock and returns how many ticks are due.
+fn due_ticks(pending: &mut f64, frame_seconds: f64) -> u32 {
+    *pending += frame_seconds.clamp(0.0, MAX_FRAME_SECONDS);
+    let mut ticks = 0;
+    while *pending >= TICK_SECONDS {
+        *pending -= TICK_SECONDS;
+        ticks += 1;
+    }
+    ticks
 }

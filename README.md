@@ -5,11 +5,10 @@ client, and a two-player desktop version built with Macroquad.
 
 ## Run and check
 
-The package has three binaries, so `cargo run` needs `--bin`:
+The package has two binaries, so `cargo run` needs `--bin`:
 
 ```sh
-cargo run --bin apple_logic   # the desktop game
-cargo run --bin demo          # the same game on a fixed-rate tick clock
+cargo run --bin ftm_snake     # the two-player desktop game
 cargo run --bin server        # WebSocket game server for the web client
 cargo test --all-targets
 cargo clippy --all-targets -- -D warnings
@@ -28,13 +27,17 @@ turn is accepted per tick. The browser client also supports LAN and tunneled pla
 
 ## Configure a multiplayer server
 
-Pass game options after Cargo's `--` separator:
+Pass the server mode and game options after Cargo's `--` separator:
 
 ```sh
-cargo run --bin server -- --width 60 --height 40 --apples 20
+cargo run --bin server -- --NONE --width 60 --height 40 --apples 20
 cargo run --bin server -- --help
 ```
 
+- `--NONE`: original standalone server, **10 moves per second**; the default if omitted.
+- `--PB`: primary/backup placeholder. Prints an explanation and exits without listening.
+- `--PAXOS`: Multi-Paxos placeholder. Prints an explanation and exits without listening.
+- Choose only one mode. PB and Paxos algorithms are not implemented yet.
 - `--width`: board columns, default **25**.
 - `--height`: board rows, default **25**.
 - `--apples`: target apples on the board, default **3**; **0** disables apples.
@@ -62,9 +65,9 @@ The frontend reads dimensions and all snakes from the server's snapshots, so
 there is no frontend board-size setting. Each snake has a stable color, your
 snake has a white outline, and the status bar shows how many players remain.
 
-## Demo
+## Desktop game
 
-`cargo run --bin demo` shows everything the game does so far, in one window:
+`cargo run --bin ftm_snake` shows everything the game does so far, in one window:
 
 - **Local multiplayer:** two snakes on one keyboard, P1 on WASD and P2 on the
   arrow keys, each score (snake length) shown at the top.
@@ -79,27 +82,31 @@ snake has a white outline, and the status bar shows how many players remain.
   frame rate, and a stalled window (over 0.25 s) does not replay a burst of moves.
 - **Restart:** Space starts a new match at any time.
 
-The demo changes no game rules; it reuses `input.rs` and `render.rs` and only
-replaces the timing loop in `main.rs`.
 
 ## Code layout
 
 - `lib.rs`: shared cell coordinates, board dimensions, player and apple counts.
-- `config.rs`: server options, defaults, validation, and starting-area capacity.
+- `config.rs`: game rules configuration, defaults, validation, and starting-area capacity.
 - `game.rs`: game state, simultaneous collision rules, match result, and apple refills.
 - `snake.rs`: segment storage, turns, and growth.
 - `player.rs`: direction values and their movement offsets.
-- `apple.rs`: random selection of unoccupied cells.
 - `input.rs`: desktop keyboard bindings.
 - `render.rs`: board and entity drawing, sized to the window.
-- `main.rs`: application setup and timing.
-- `bin/demo.rs`: the same game on a fixed-rate tick clock.
-- `bin/server.rs`: WebSocket connections and heartbeat timeouts.
-- `lobby.rs`: player readiness, server game ticks, and state broadcasts.
+- `main.rs`: desktop setup and the fixed-rate tick clock.
+- `round.rs`: one match's game, random stream, and player-to-snake mapping; shared
+  by the lobby and the consensus adapter.
+- `bin/server.rs`: small command-line entry point.
+- `server/options.rs`: mode flags and board/apple argument parsing.
+- `server/mod.rs`: mode selection and listener startup; add future runtimes here.
+- `server/connection.rs`: WebSocket connections and heartbeat timeouts.
+- `lobby/mod.rs`: standalone player readiness, game clock, and broadcasts.
+- `lobby/snapshot.rs`: builds the browser's view of the running round.
+- `consensus/`: separate Multi-Paxos teaching interfaces and local test adapter.
 
-The game rules have no keyboard, window, or clock calls. The server's consensus
-game adapter applies chosen batches to `Game::set_direction` and `Game::tick`
-using a seeded random generator.
+The game rules have no keyboard, window, or clock calls. In `--NONE`, directions
+call `Game::set_direction` directly and the round calls `Game::tick` every 100 ms.
+The consensus test adapter is not part of this runtime.
+See [the server guide](docs/server.md) for the flow and extension points.
 
 Snake segments include the head at the front of a queue. An occupancy set mirrors
 that queue for collision lookup. Each tick, `Game` plans every snake's next head
@@ -108,11 +115,11 @@ is going. A move may enter a tail cell that is being vacated (by either snake), 
 not if that snake is growing or dying this tick. Fatal moves preserve the last
 valid positions.
 
-To extend the rules, add settings to `GameConfig` and its argument parser, then
+To extend the rules, add settings to `GameConfig` and `ServerOptions::from_args`, then
 pass them through `Game::with_config`. Snakes and collision plans are vectors,
 so the game loop handles every joined player. `starting_snakes` is the single
 place to change spawn placement; `SPAWN_SPACING` controls reserved starting
-space. `LOCAL_PLAYER_COUNT` only controls the two-player desktop demo.
+space. `LOCAL_PLAYER_COUNT` only controls the two-player desktop game.
 
 ## Web frontend
 
@@ -123,7 +130,7 @@ server and draws whatever state the server sends back.
 ```sh
 cd web
 npm install
-npm run dev        # http://localhost:5173
+npm run dev        # http://localhost:5180
 npm run build      # type-check and bundle into web/dist
 ```
 
@@ -136,7 +143,7 @@ Leave the field unchanged when using the normal local, LAN, or tunnel setup.
 Override it only for a separate backend, for example with
 `VITE_SERVER_URL=ws://host:8080 npm run dev`.
 To serve the frontend to other computers on your LAN, run
-`npm run dev -- --host 0.0.0.0` and open `http://<server-ip>:5173` on those computers. Run the WebSocket
+`npm run dev -- --host 0.0.0.0` and open `http://<server-ip>:5180` on those computers. Run the WebSocket
 server on the same computer; LAN players only need access to the frontend port.
 
 ## Share your local game through Cloudflare
@@ -144,7 +151,7 @@ server on the same computer; LAN players only need access to the frontend port.
 Both the frontend and Rust backend keep running on your computer. One temporary
 public HTTPS link carries the website and the game's WebSocket messages:
 
-`Player's browser → Cloudflare Tunnel → Vite :5173 → /ws proxy → Rust :8080`
+`Player's browser → Cloudflare Tunnel → Vite :5180 → /ws proxy → Rust :8080`
 
 ### One-time setup
 
@@ -191,19 +198,19 @@ new link and reload it. This is a development setup: anyone with the link can
 reach the game and frontend development assets. The board size determines how
 many players can join.
 
-The tunnel script sets the origin Host header to `localhost:5173`, which Vite
+The tunnel script sets the origin Host header to `localhost:5180`, which Vite
 already accepts. It does not disable Vite's host checks or allow every
-`trycloudflare.com` subdomain. Vite uses a fixed port and exits if 5173 is taken.
+`trycloudflare.com` subdomain. Vite uses a fixed port and exits if 5180 is taken.
 
 ### Troubleshooting
 
-- **Cloudflare 502:** check that `npm run dev` is running on port 5173.
+- **Cloudflare 502:** check that `npm run dev` is running on port 5180.
 - **Website loads, but joining disconnects:** check the Rust terminal and port
   8080. The automatically filled lobby address should end in `/ws` and use
   `wss://` on the public HTTPS page, without `:8080`. Remove an old
   `VITE_SERVER_URL` override and restart Vite if the field points elsewhere.
-- **Port 5173 is already in use:** stop the existing frontend before restarting;
-  the tunnel always forwards to 5173.
+- **Port 5180 is already in use:** stop the existing frontend before restarting;
+  the tunnel always forwards to 5180.
 - **Tunnel cannot connect on your network:** try `npm run tunnel -- --protocol http2`
   to use HTTP/2 instead of QUIC.
 - **Quick Tunnel configuration conflict:** if you already use a Cloudflare
@@ -219,12 +226,14 @@ Messages are JSON, defined in
 `web/src/protocol.ts`:
 
 - Client → server: `join`, `set_ready`, `direction`, and `heartbeat`.
-- Server → client: `welcome`, `lobby`, `state`, `game_over`, `input_applied`, and `error`.
+- Server → client in `--NONE`: `welcome`, `lobby`, `state`, `game_over`, and `error`.
 
 For example, a turn is `{"type":"direction","direction":"up"}` and a welcome
 is `{"type":"welcome","player_id":"1"}`. Coordinates are `[x, y]` pairs.
-The server targets **30 simulation ticks per second**, applying one chosen input
-batch per tick and broadcasting a full snapshot afterward. Browsers send
+The standalone server runs **10 simulation ticks per second**, moving snakes
+once and broadcasting a full snapshot afterward. The optional direction
+`sequence` and `input_applied` receipt are reserved for future replicated modes;
+`--NONE` ignores sequences and does not send consensus receipts. Browsers send
 `{"type":"heartbeat"}` every 25 ms (about 40 per second). Rust marks a joined
 player disconnected after 1 second without a heartbeat, using a deadline that
 resets on each heartbeat. Direction messages do not reset it. Browser timers
@@ -233,18 +242,20 @@ visible while playing.
 
 ## Multi-Paxos teaching scaffold
 
-See [the interface guide](docs/consensus.md) for the shared types, group ownership,
+The scaffold uses the CS5414 notes’ `P1a/P1b/P2a/P2b`, p-value, command, decision,
+and replica terminology. See [the interface guide](docs/consensus.md) for shared types, group ownership,
 normal tick flow, recovery handoff, deterministic replay assumptions and tests.
-The server currently uses **LocalAgreement**: a memory-only, single-node log with
-**no distributed fault tolerance**. The distributed protocol methods explicitly
-report unsupported/not-ready; students implement elections and quorum logic.
+**LocalProposer** remains a memory-only test adapter with **no distributed fault
+tolerance**. It is used by the consensus tests, not the playable server.
+The distributed protocol methods explicitly report unsupported/not-ready;
+students implement elections and quorum logic.
 
-Run the server normally; there is no Paxos mode to enable yet. Each round has
-its own ordered log and seeded game adapter. Direction messages carry a sequence
-number, and `input_applied` acknowledges only chosen-and-applied inputs. One
-unresolved fresh tick blocks the next proposal while incoming inputs keep queuing.
-Recovery no-ops consume log slots without moving the game. Standalone desktop
-binaries retain their separate 10 Hz clocks.
+`--PAXOS` reserves the mode name but exits until a distributed runtime is added.
+The existing scaffold provides an ordered log, seeded game adapter, input
+batching, and decided-and-executed receipts. One unresolved fresh tick blocks the
+next proposal while inputs keep queuing. Recovery no-ops consume log slots
+without moving the game. `--PB` is also a reserved mode; no primary/backup
+implementation exists yet.
 
 For an isolated local test, set `SNAKE_BIND_ADDRESS=127.0.0.1:18080` before the
 server command. The default remains `0.0.0.0:8080`; the normal Vite proxy expects

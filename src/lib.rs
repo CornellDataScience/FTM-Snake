@@ -1,11 +1,12 @@
 //! Game rules shared by the desktop client and the game server.
-pub mod apple;
 pub mod config;
 pub mod consensus;
 pub mod game;
 pub mod lobby;
 pub mod player;
 pub mod protocol;
+pub mod round;
+pub mod server;
 pub mod snake;
 
 pub type Point = (i16, i16);

@@ -1,13 +1,18 @@
-use apple_logic::{
-    LOCAL_PLAYER_COUNT, Point,
+use ftm_snake::{
+    Point,
     game::{Game, Status},
 };
 use macroquad::prelude::*;
 
 const BOARD_MARGIN: f32 = 10.0;
 const FONT_SIZE: f32 = 32.0;
-/// Body and head colors per player.
-const SNAKE_COLORS: [(Color, Color); LOCAL_PLAYER_COUNT] = [(LIME, DARKGREEN), (SKYBLUE, DARKBLUE)];
+/// Body and head colors per player; reused in order if there are more snakes.
+const SNAKE_COLORS: &[(Color, Color)] = &[
+    (LIME, DARKGREEN),
+    (SKYBLUE, DARKBLUE),
+    (GOLD, ORANGE),
+    (PINK, MAGENTA),
+];
 const DEAD_COLORS: (Color, Color) = (GRAY, DARKGRAY);
 /// Particles spiral in for `COLLAPSE_SECONDS`, then a flash lasts until
 /// `IMPLOSION_SECONDS`, after which the result is shown.
@@ -40,9 +45,9 @@ pub fn draw_game(game: &Game, since_end: Option<f32>) {
         let y = origin.y + f32::from(row) * cell_size;
         draw_line(origin.x, y, origin.x + width, y, 2.0, LIGHTGRAY);
     }
-    for (snake, colors) in game.snakes().iter().zip(SNAKE_COLORS) {
+    for (player, snake) in game.snakes().iter().enumerate() {
         let (body, head) = if snake.is_alive() {
-            colors
+            snake_colors(player)
         } else {
             DEAD_COLORS
         };
@@ -71,7 +76,8 @@ pub fn draw_game(game: &Game, since_end: Option<f32>) {
 /// Draws both heads in their player colors (split diagonally when they share
 /// a cell) and an implosion collapsing onto the point between them.
 fn draw_head_on((a, b): (Point, Point), origin: Vec2, size: f32, elapsed: f32) {
-    let [(_, color_a), (_, color_b)] = SNAKE_COLORS;
+    // Head-on collisions are drawn for the two-player desktop game.
+    let ((_, color_a), (_, color_b)) = (snake_colors(0), snake_colors(1));
     if a == b {
         let corner = cell_corner(a, origin, size);
         let top_right = corner + vec2(size, 0.0);
@@ -114,7 +120,8 @@ fn draw_head_on((a, b): (Point, Point), origin: Vec2, size: f32, elapsed: f32) {
 
 fn draw_scores(game: &Game, origin: Vec2) {
     let mut x = origin.x + 8.0;
-    for (player, (snake, (_, color))) in game.snakes().iter().zip(SNAKE_COLORS).enumerate() {
+    for (player, snake) in game.snakes().iter().enumerate() {
+        let (_, color) = snake_colors(player);
         let text = format!("P{}: {}", player + 1, snake.length());
         draw_text(&text, x, origin.y + FONT_SIZE, FONT_SIZE, color);
         x += measure_text(&text, None, FONT_SIZE as u16, 1.0).width + 24.0;
@@ -146,6 +153,10 @@ fn draw_result(status: Status) {
 fn draw_centered_text(text: &str, y: f32, size: f32) {
     let width = measure_text(text, None, size as u16, 1.0).width;
     draw_text(text, (screen_width() - width) / 2.0, y, size, WHITE);
+}
+
+fn snake_colors(player: usize) -> (Color, Color) {
+    SNAKE_COLORS[player % SNAKE_COLORS.len()]
 }
 
 fn cell_corner((x, y): Point, origin: Vec2, size: f32) -> Vec2 {
